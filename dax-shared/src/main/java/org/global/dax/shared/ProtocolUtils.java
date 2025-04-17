@@ -3,8 +3,8 @@ package org.global.dax.shared;
 import static org.global.dax.shared.Constants.MAX_KEY_SIZE;
 import static org.global.dax.shared.Constants.MAX_VALUE_SIZE;
 
-public class ProtocolHandler {
-    public static String handleClientRequest(String input, Cache cache) {
+public class ProtocolUtils {
+    public static String handleClientRequest(String input, ShardedCache cache) {
         try {
             String[] parts = input.trim().split(" ");
             String command = parts[0].toUpperCase();

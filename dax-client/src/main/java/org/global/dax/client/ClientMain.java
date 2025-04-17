@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.util.Scanner;
 
 import static org.global.dax.shared.Constants.*;
@@ -45,21 +46,20 @@ public final class ClientMain {
     private void startClient() {
         int attempt = 0;
         while (!startConnection(attempt)) {
-            attempt++;
-
             //simple retry with exponential backoff
-            if (attempt < MAX_RETRIES) {
-                retryConnection(attempt);
+            if (++attempt >= MAX_RETRIES) {
+                LOG.error("Unable to connect to the server after {} attempts", MAX_RETRIES);
+                return;
             }
-        }
-
-        if (attempt >= MAX_RETRIES) {
-            LOG.error("Unable to connect to the server after max {} retry attempts", MAX_RETRIES);
-            return;
+            retryConnection(attempt);
         }
 
         Scanner scanner = new Scanner(System.in);
         while (true) {
+            if (!scanner.hasNextLine()) {
+                break;
+            }
+
             String command = scanner.nextLine();
             if (command.equalsIgnoreCase("exit")) {
                 break;
@@ -74,6 +74,7 @@ public final class ClientMain {
         try {
             LOG.info("Client attempting [{}] to connect to the server [{}:{}]", attempt, HOST, PORT);
             clientSocket = new Socket(HOST, PORT);
+            clientSocket.setSoTimeout(READ_TIMEOUT_MS);
             out = new PrintWriter(clientSocket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
             LOG.info("Client is connected to the server [{}:{}]", HOST, PORT);
@@ -110,24 +111,31 @@ public final class ClientMain {
     private void retryConnection(int attempt) {
         try {
             long timeout = TIMEOUT_MS * attempt;
-            LOG.info("Retrying the connection after {}ms", timeout);
+            LOG.info("Retrying the connection after {} ms", timeout);
             Thread.sleep(timeout);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
     }
 
-    protected void sendCommand(String command) {
-        LOG.info("Sending command [{}] to the server [{}:{}]", command, HOST, PORT);
-        out.write(command + "\n");
-        out.flush();
+    private void sendCommand(String command) {
+        if (out != null) {
+            LOG.info("Sending command [{}] to the server [{}:{}]", command, HOST, PORT);
+            out.write(command + "\n");
+            out.flush();
+        }
     }
 
-    protected String getServerResponse() {
-        try {
-            return in.readLine();
-        } catch (IOException e) {
-            LOG.error("Exception occurred when receiving the message from server due to {}", e.getMessage());
+    private String getServerResponse() {
+        if (in != null) {
+            try {
+                return in.readLine();
+            } catch (SocketTimeoutException e) {
+                LOG.error("Client timed out while waiting for the response from server due to {}", e.getMessage());
+            }
+            catch (IOException e) {
+                LOG.error("Exception occurred when receiving the message from server due to {}", e.getMessage());
+            }
         }
         return "";
     }

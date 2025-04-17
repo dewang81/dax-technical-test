@@ -8,6 +8,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.*;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.Socket;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,7 +41,7 @@ class ClientMainTest {
     }
 
     @Test
-    void shouldSendCommandAndReceiveResponseUsingTestClientSocket() {
+    void shouldSendCommandAndReceiveResponseUsingTestClientSocket() throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
         String value = "test123";
         ByteArrayInputStream inputStream = new ByteArrayInputStream(value.getBytes());
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -52,8 +54,17 @@ class ClientMainTest {
                 new BufferedReader(new InputStreamReader(inputStream))
         );
 
-        client.sendCommand("GET abcd");
-        String response = client.getServerResponse();
+        Method sendCommand = client.getClass()
+                .getDeclaredMethod(
+                        "sendCommand",
+                        String.class
+                );
+        sendCommand.setAccessible(true);
+        sendCommand.invoke(client, "GET abcd");
+
+        Method getServerResponse = client.getClass().getDeclaredMethod("getServerResponse");
+        getServerResponse.setAccessible(true);
+        String response = getServerResponse.invoke(client).toString();
         assertEquals(value, response);
     }
 }
